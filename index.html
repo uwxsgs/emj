@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#6d28d9">
     <title>Emoji Fusion</title>
-    <link rel="manifest" href="manifest.json">
+    <!-- The manifest is now inlined directly in the main script -->
     <link rel="apple-touch-icon" href="https://i.imgur.com/vUVzQ6J.jpeg">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
@@ -100,11 +100,74 @@
 
     <!-- PWA Service Worker and Game Logic -->
     <script>
-        // --- PWA Service Worker Logic ---
+        // --- PWA SETUP (MANIFEST & SERVICE WORKER) ---
+        const manifestData = {
+          "name": "Emoji Fusion",
+          "short_name": "EmojiFusion",
+          "start_url": ".",
+          "display": "standalone",
+          "background_color": "#4c1d95",
+          "theme_color": "#6d28d9",
+          "description": "A game to mix and match emojis to discover new ones.",
+          "icons": [
+            { "src": "https://i.imgur.com/vUVzQ6J.jpeg", "sizes": "192x192", "type": "image/jpeg" },
+            { "src": "https://i.imgur.com/vUVzQ6J.jpeg", "sizes": "512x512", "type": "image/jpeg" }
+          ]
+        };
+
+        const serviceWorkerScript = `
+            const CACHE_NAME = 'emoji-fusion-v5';
+            const urlsToCache = [
+              '.',
+              'https://cdn.tailwindcss.com',
+              'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap',
+              'https://i.imgur.com/vUVzQ6J.jpeg'
+            ];
+
+            self.addEventListener('install', event => {
+              event.waitUntil(
+                caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+              );
+            });
+
+            self.addEventListener('fetch', event => {
+              event.respondWith(
+                caches.match(event.request).then(response => response || fetch(event.request))
+              );
+            });
+
+            self.addEventListener('activate', event => {
+              const cacheWhitelist = [CACHE_NAME];
+              event.waitUntil(
+                caches.keys().then(cacheNames => {
+                  return Promise.all(
+                    cacheNames.map(cacheName => {
+                      if (cacheWhitelist.indexOf(cacheName) === -1) {
+                        return caches.delete(cacheName);
+                      }
+                    })
+                  );
+                })
+              );
+            });
+        `;
+
+        // 1. Inline Manifest
+        const stringifiedManifest = JSON.stringify(manifestData);
+        const blob = new Blob([stringifiedManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestURL;
+        document.head.appendChild(manifestLink);
+
+        // 2. Inline Service Worker
         if ('serviceWorker' in navigator) {
+            const swBlob = new Blob([serviceWorkerScript], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(swBlob);
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(registration => console.log('Service Worker registered:', registration))
+                navigator.serviceWorker.register(swUrl)
+                    .then(registration => console.log('Service Worker registered successfully:', registration))
                     .catch(error => console.log('Service Worker registration failed:', error));
             });
         }
@@ -154,7 +217,6 @@
             let discovered = new Set();
             let chamberEmojis = [];
 
-            // --- Initialize Game ---
             function init() {
                 baseEmojis.forEach(emoji => emojiTray.appendChild(createEmojiElement(emoji)));
                 updateCounter();
@@ -169,7 +231,6 @@
                 return el;
             }
 
-            // --- Drag and Drop Logic ---
             document.addEventListener('dragstart', e => e.target.classList.contains('emoji-item') && e.dataTransfer.setData('text/plain', e.target.dataset.emoji));
             document.addEventListener('dragend', e => e.target.classList.contains('emoji-item') && (e.target.style.opacity = '1'));
             fusionChamber.addEventListener('dragover', e => { e.preventDefault(); if (chamberEmojis.length < 2) fusionChamber.classList.add('over'); });
@@ -181,7 +242,6 @@
                 if (emoji && chamberEmojis.length < 2) addEmojiToChamber(emoji);
             });
             
-            // --- Game Mechanics ---
             function addEmojiToChamber(emoji) {
                 chamberEmojis.push(emoji);
                 const emojiEl = document.createElement('div');
@@ -241,38 +301,5 @@
             init();
         });
     </script>
-    
-    <!-- Placeholder for manifest.json -->
-    <script type="application/json" id="manifest.json">
-    {
-      "name": "Emoji Fusion",
-      "short_name": "EmojiFusion",
-      "start_url": "/index.html",
-      "display": "standalone",
-      "background_color": "#4c1d95",
-      "theme_color": "#6d28d9",
-      "description": "A game to mix and match emojis to discover new ones.",
-      "icons": [ { "src": "https://i.imgur.com/vUVzQ6J.jpeg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any maskable" } ]
-    }
-    </script>
-
-    <!-- Placeholder for service-worker.js -->
-    <script id="service-worker.js">
-    const CACHE_NAME = 'emoji-fusion-v4'; // Incremented version
-    const urlsToCache = [
-      '/',
-      '/index.html',
-      'https://i.imgur.com/vUVzQ6J.jpeg',
-      'https://cdn.tailwindcss.com',
-      'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap'
-    ];
-    self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(urlsToCache))));
-    self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
-    self.addEventListener('activate', e => {
-      const cacheWhitelist = [CACHE_NAME];
-      e.waitUntil(caches.keys().then(names => Promise.all(names.map(name => !cacheWhitelist.includes(name) && caches.delete(name)))));
-    });
-    </script>
-
 </body>
 </html>
