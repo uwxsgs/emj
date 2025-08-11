@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6d28d9">
+    <title>Emoji Fusion</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://i.imgur.com/vUVzQ6J.jpeg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            overscroll-behavior: contain;
+            touch-action: manipulation;
+        }
+        .fusion-chamber {
+            background-image:
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,0.1) 1px, transparent 0),
+                radial-gradient(circle at 1px 1px, rgba(0,0,0,0.1) 1px, transparent 0);
+            background-size: 20px 20px;
+            background-position: center;
+            border: 4px dashed #a78bfa;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .fusion-chamber.over {
+            background-color: #c4b5fd;
+            transform: scale(1.05);
+        }
+        .emoji-item {
+            cursor: grab;
+            transition: transform 0.2s ease-in-out;
+        }
+        .emoji-item:active {
+            cursor: grabbing;
+            transform: scale(1.2);
+            z-index: 50;
+        }
+        .discovered-emoji {
+            animation: pop-in 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        @keyframes pop-in {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .shake {
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        #install-prompt {
+            transition: bottom 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-violet-900 text-white overflow-hidden h-screen flex flex-col">
+
+    <!-- App Header -->
+    <header class="text-center p-4 bg-violet-800 shadow-lg">
+        <h1 class="text-2xl font-bold tracking-wider">Emoji Fusion</h1>
+    </header>
+
+    <!-- Game Area -->
+    <main class="flex-grow flex flex-col p-4 overflow-hidden">
+        <!-- Fusion Chamber -->
+        <div id="fusion-chamber" class="fusion-chamber w-full h-48 md:h-64 rounded-2xl flex items-center justify-center mb-4 relative overflow-hidden">
+             <p id="chamber-text" class="text-violet-300 text-lg font-semibold">Drag two emojis here!</p>
+             <div id="fusion-slots" class="flex space-x-4"></div>
+        </div>
+
+        <!-- Discovered Emojis Gallery -->
+        <div class="flex-grow bg-violet-800/50 rounded-2xl p-4 overflow-y-auto">
+            <div class="flex justify-between items-center mb-2">
+                 <h2 class="text-xl font-semibold">Discovered Fusions</h2>
+                 <p id="discovery-counter" class="text-lg font-bold">0 / 0</p>
+            </div>
+            <div id="discovered-gallery" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-4">
+                <!-- Discovered emojis will appear here -->
+            </div>
+        </div>
+
+        <!-- Emoji Selection Tray -->
+        <div class="bg-violet-800 rounded-2xl p-4 mt-4 shadow-inner">
+            <h3 class="text-lg font-semibold text-center mb-2">Ingredients</h3>
+            <div id="emoji-tray" class="flex justify-center items-center gap-4 flex-wrap">
+                <!-- Base emojis will be populated by JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Install Prompt -->
+    <div id="install-prompt" class="fixed bottom-[-100px] left-0 right-0 p-4 bg-green-500 text-white text-center shadow-lg">
+        <p class="mb-2">Get the full app experience!</p>
+        <button id="install-button" class="bg-white text-green-600 font-bold py-2 px-4 rounded-lg">Install App</button>
+    </div>
+
+    <!-- PWA Service Worker and Game Logic -->
+    <script>
+        // --- PWA Service Worker Logic ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => console.log('Service Worker registered:', registration))
+                    .catch(error => console.log('Service Worker registration failed:', error));
+            });
+        }
+
+        // --- Install Prompt Logic ---
+        let deferredPrompt;
+        const installPrompt = document.getElementById('install-prompt');
+        const installButton = document.getElementById('install-button');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installPrompt.style.bottom = '0px';
+        });
+
+        installButton.addEventListener('click', async () => {
+            installPrompt.style.bottom = '-100px';
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response to the install prompt: ${outcome}`);
+                deferredPrompt = null;
+            }
+        });
+        
+        window.addEventListener('appinstalled', () => {
+          console.log('PWA was installed');
+          installPrompt.style.display = 'none';
+        });
+
+        // --- Game Logic ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const fusionChamber = document.getElementById('fusion-chamber');
+            const chamberText = document.getElementById('chamber-text');
+            const fusionSlots = document.getElementById('fusion-slots');
+            const emojiTray = document.getElementById('emoji-tray');
+            const discoveredGallery = document.getElementById('discovered-gallery');
+            const discoveryCounter = document.getElementById('discovery-counter');
+
+            const baseEmojis = ['👑', '👨', '👩', '❤️', '🔥', '💧', '👻', '🍕', '🚀', '⭐', '🤖', '💡'];
+            const combinations = {
+                '👑👨': '🤴', '👑👩': '👸', '❤️🔥': '💖', '🔥💧': '💨',
+                '👻🍕': '😋', '🚀⭐': '🌠', '🤖💡': '🧠', '👨❤️👩': '💑',
+            };
+            
+            const totalCombinations = Object.keys(combinations).length;
+            let discovered = new Set();
+            let chamberEmojis = [];
+
+            // --- Initialize Game ---
+            function init() {
+                baseEmojis.forEach(emoji => emojiTray.appendChild(createEmojiElement(emoji)));
+                updateCounter();
+            }
+            
+            function createEmojiElement(emoji) {
+                const el = document.createElement('div');
+                el.textContent = emoji;
+                el.className = 'emoji-item text-4xl p-2 rounded-lg bg-violet-700/50 hover:bg-violet-600';
+                el.draggable = true;
+                el.dataset.emoji = emoji;
+                return el;
+            }
+
+            // --- Drag and Drop Logic ---
+            document.addEventListener('dragstart', e => e.target.classList.contains('emoji-item') && e.dataTransfer.setData('text/plain', e.target.dataset.emoji));
+            document.addEventListener('dragend', e => e.target.classList.contains('emoji-item') && (e.target.style.opacity = '1'));
+            fusionChamber.addEventListener('dragover', e => { e.preventDefault(); if (chamberEmojis.length < 2) fusionChamber.classList.add('over'); });
+            fusionChamber.addEventListener('dragleave', () => fusionChamber.classList.remove('over'));
+            fusionChamber.addEventListener('drop', e => {
+                e.preventDefault();
+                fusionChamber.classList.remove('over');
+                const emoji = e.dataTransfer.getData('text/plain');
+                if (emoji && chamberEmojis.length < 2) addEmojiToChamber(emoji);
+            });
+            
+            // --- Game Mechanics ---
+            function addEmojiToChamber(emoji) {
+                chamberEmojis.push(emoji);
+                const emojiEl = document.createElement('div');
+                emojiEl.textContent = emoji;
+                emojiEl.className = 'text-5xl animate-pop-in';
+                fusionSlots.appendChild(emojiEl);
+                chamberText.style.display = 'none';
+                if (chamberEmojis.length === 2) setTimeout(tryFusion, 500);
+            }
+
+            function tryFusion() {
+                const key1 = chamberEmojis[0] + chamberEmojis[1];
+                const key2 = chamberEmojis[1] + chamberEmojis[0];
+                const result = combinations[key1] || combinations[key2];
+                if (result) handleSuccess(result, key1, key2);
+                else handleFailure();
+            }
+
+            function handleSuccess(result, key1, key2) {
+                fusionSlots.innerHTML = `<div class="text-7xl animate-pop-in">${result}</div>`;
+                if (!discovered.has(result)) {
+                    discovered.add(result);
+                    const comboKey = combinations[key1] ? key1 : key2;
+                    const discoveryEl = createDiscoveryElement(result, comboKey);
+                    discoveredGallery.appendChild(discoveryEl);
+                    updateCounter();
+                }
+                setTimeout(resetChamber, 1500);
+            }
+
+            function createDiscoveryElement(result, comboKey) {
+                const discoveryEl = document.createElement('div');
+                discoveryEl.className = 'discovered-emoji bg-violet-700 p-2 rounded-lg text-center';
+                discoveryEl.innerHTML = `<div class="text-4xl">${result}</div><div class="text-xs mt-1">${comboKey[0]} + ${comboKey[1]}</div>`;
+                return discoveryEl;
+            }
+
+            function handleFailure() {
+                fusionChamber.classList.add('shake');
+                fusionSlots.innerHTML = `<div class="text-3xl text-red-400">No Fusion!</div>`;
+                setTimeout(() => {
+                    fusionChamber.classList.remove('shake');
+                    resetChamber();
+                }, 1000);
+            }
+
+            function resetChamber() {
+                chamberEmojis = [];
+                fusionSlots.innerHTML = '';
+                chamberText.style.display = 'block';
+            }
+
+            function updateCounter() {
+                discoveryCounter.textContent = `${discovered.size} / ${totalCombinations}`;
+            }
+
+            init();
+        });
+    </script>
+    
+    <!-- Placeholder for manifest.json -->
+    <script type="application/json" id="manifest.json">
+    {
+      "name": "Emoji Fusion",
+      "short_name": "EmojiFusion",
+      "start_url": "/index.html",
+      "display": "standalone",
+      "background_color": "#4c1d95",
+      "theme_color": "#6d28d9",
+      "description": "A game to mix and match emojis to discover new ones.",
+      "icons": [ { "src": "https://i.imgur.com/vUVzQ6J.jpeg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any maskable" } ]
+    }
+    </script>
+
+    <!-- Placeholder for service-worker.js -->
+    <script id="service-worker.js">
+    const CACHE_NAME = 'emoji-fusion-v4'; // Incremented version
+    const urlsToCache = [
+      '/',
+      '/index.html',
+      'https://i.imgur.com/vUVzQ6J.jpeg',
+      'https://cdn.tailwindcss.com',
+      'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap'
+    ];
+    self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(urlsToCache))));
+    self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+    self.addEventListener('activate', e => {
+      const cacheWhitelist = [CACHE_NAME];
+      e.waitUntil(caches.keys().then(names => Promise.all(names.map(name => !cacheWhitelist.includes(name) && caches.delete(name)))));
+    });
+    </script>
+
+</body>
+</html>
